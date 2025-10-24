@@ -1,0 +1,68 @@
+# -*- coding: UTF-8 -*-  
+library(dplyr)  
+library(ggplot2)  
+library(patchwork)  
+library(Seurat)  
+library(clustree)  # 用于评估聚类稳定性  
+library(DoubletFinder)
+library(clustree)  
+library(igraph)  
+library(cluster)  
+library(bluster)
+library(SeuratWrappers)
+# 设置工作目录  
+projectPath <- "/mnt2/wanggd_group/zjj/BGCscRNA/MSC_Duan"  
+setwd(projectPath)
+
+load('/mnt2/wanggd_group/zjj/BGCscRNA/MSC_Duan/Data/Integration20250829/20250829_3SamplesMSC_FastMNNIntegration_FindClusters_objIntegrated.Rdata')
+# 验证是否成功重命名
+head(objIntegrated@meta.data)
+objIntegrated[["RNA"]]<-as(object=objIntegrated[["RNA"]],Class="Assay")
+
+###————— Conserved & specific
+###############
+library(SCP)
+library(BiocParallel)
+library(grid)
+#全的 参考  https://pmc.ncbi.nlm.nih.gov/articles/PMC11094970/ 		和 马的那篇文章	   
+
+genes_of_interest <- c(
+  "ITGB1", "CD44", 'PTPRC', 'B2M','CD79A','DRA', "GD2", "STRO-3", "FZD9", "PDGFRB", "SSEA-4", "TNFRSF10D", 
+  "KIT", "LGR5", "ABCG2", "ENTPD1", "CD200", "LGR6", "EPHB2", "ROR2", 
+  "MX1", "CMKLR1", "CD9", "SUSD2", "SDC2", "LY6A", "ITGAV", "ENG", 
+  "HMMR", "PODXL", "CD274", "TNFAIP6", "THY1", "ITGA6", "F3", "CXCR4", 
+  "GLI1", "STRO-1", "MCAM", "STRO-4", "EPHA7", "LEPR", "CD34", "ALCAM", 
+  "CSPG4", "EPHA2", "NT5E", "ITGA1", "NCAM1", "NGFR", "PDGFRA", "NES", 
+  "VCAM1", "BST2", "ISLR", "TLX1", "ALDH1A1", "SERPINF1", "S100A9", 
+  "LRRC75A"
+)
+#典型标记物 CD73/NT5E、CD90/THY1、CD105/ENG 和 CD44
+# 删掉 表达不高的   RUNX2   SOX9   PPARG
+genes_of_interest <- c(
+  "ITGB1", "CD44", "PTPRC", "B2M", "CD79A", "PDGFRB", "ABCG2", 
+  "CD200", "ROR2", "CD9", "ITGAV", "HMMR", "TNFAIP6", "THY1", 
+  "ITGA6", "GLI1", "EPHA7", "ALCAM", "EPHA2", "NCAM1", "PDGFRA", 
+  "BST2", "TLX1", "LRRC75A"
+)
+					   
+valid_genes <- intersect(genes_of_interest, rownames(objIntegrated))
+#pdf(file.path(projectPath, "Output/Integration20250829",'DotPlo_MSC_SpecificMarkers_in_AD-BM-UC_Added_ExpressedMarkers.pdf'),width = 6, height = 10)
+pdf(file.path(projectPath, "Output/Integration20250829",'DotPlo_MSC_SpecificMarkers_in_AD-BM-UC_AllMSCMarkers.pdf'),width = 6, height = 13)
+
+ht <- GroupHeatmap(
+  srt = objIntegrated,
+  features = genes_of_interest,#genes,
+  group.by = c("MSC_Clusters",'orig.ident'),
+  heatmap_palette = 'YlOrRd',#"RdBu",
+  group_palette = c("Paired",'Set3'),   
+  cell_annotation = c("Phase",'G2M_Score','S_Score'),
+  cell_annotation_palette = c("Dark2","Paired", "Paired"),  #Dark2
+  show_row_names = TRUE, row_names_side = "left", 
+  add_dot = TRUE, add_reticle = TRUE
+)
+print(ht$plot)
+dev.off()
+png(file.path(projectPath, "Output/Integration20250829",'DotPlot_MSC_SpecificMarkers_in_AT-BM-UC_AllMSCMarkers_300dpi.png'),
+    width = 8, height = 14, units = "in", res = 300, pointsize = 12)
+print(ht$plot)
+dev.off()
