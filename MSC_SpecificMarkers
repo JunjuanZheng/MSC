@@ -22,6 +22,8 @@ objIntegrated[["RNA"]]<-as(object=objIntegrated[["RNA"]],Class="Assay")
 ###————— Conserved & specific
 ###############
 library(SCP)
+library(scop)
+
 library(BiocParallel)
 library(grid)
 #全的 参考  https://pmc.ncbi.nlm.nih.gov/articles/PMC11094970/ 		和 马的那篇文章	   
@@ -58,7 +60,9 @@ ht <- GroupHeatmap(
   cell_annotation = c("Phase",'G2M_Score','S_Score'),
   cell_annotation_palette = c("Dark2","Paired", "Paired"),  #Dark2
   show_row_names = TRUE, row_names_side = "left", 
-  add_dot = TRUE, add_reticle = TRUE
+  add_dot = TRUE, add_reticle = TRUE,
+  anno_features = FALSE,
+  features_width = unit(0, "mm")
 )
 print(ht$plot)
 dev.off()
