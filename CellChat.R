@@ -38,7 +38,7 @@ cellchat <- createCellChat(object = data.input, meta = meta, group.by = "labels"
 # 使用人类数据库（如果是小鼠，改为 CellChatDB.mouse）
 CellChatDB <- CellChatDB.human
 # 可以选择使用全部数据库或子集
-# CellChatDB.use <- subsetDB(CellChatDB, search = "Secreted Signaling")  # 只用分泌信号
+# CellChatDB.use <- subsetDB(CellChatDB, search = "Secreted Signaling")  # 只用分泌信号cytokines b and growth factors
 CellChatDB.use <- CellChatDB  # 使用全部数据库
 cellchat@DB <- CellChatDB.use
 
