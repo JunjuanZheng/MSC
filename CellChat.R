@@ -125,7 +125,23 @@ ggsave(filename = file.path(projectPath, "./Output/Integration20250829/CellChat_
 ggsave(filename = file.path(projectPath, "./Output/Integration20250829/CellChat_C4_bubble_plot.png"),
        plot = p_combined, width = 16, height = 10, dpi = 300)
 
-# --- 8. 自定义气泡图（更接近上传图片的风格）---
+
+
+###################################
+# 指定特定的通讯通路
+unique(df.net$pathway_name)
+pairLR.use <- extractEnrichedLR(cellchat, signaling = c("IL6R","IL6ST"))
+pairLR.use
+netVisual_bubble(cellchat, sources.use = 5, targets.use = c(1,2,3,4,6,7,8), remove.isolate = FALSE,pairLR.use = pairLR.use)
+
+
+
+###################################
+
+
+
+
+# --- 8. 自定义气泡图---
 # =============================================================================
 # 合并气泡图：修正版
 # =============================================================================
