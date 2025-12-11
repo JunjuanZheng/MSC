@@ -130,7 +130,15 @@ ggsave(filename = file.path(projectPath, "./Output/Integration20250829/CellChat_
 ###################################
 # 指定特定的通讯通路
 unique(df.net$pathway_name)
-pairLR.use <- extractEnrichedLR(cellchat, signaling = c("IL6R","IL6ST"))
+# Cytokines (趋化因子)
+cytokine_signaling <- c("CXCL9", "CXCL8", "CXCL2", "CXCL16", "CXCL12", "CXCL10", "CXCL1",
+                        "CCL5", "CCL4L2", "CCL22", "CCL21", "CCL2", "CCL17", "CCL13", "CCL11")
+
+# Growth factors (生长因子)
+growth_factor_signaling <- c("VEGFB", "VEGFA", "PGF", "PDGFC", 
+                              "IGF2", "IGF1", "HGF", 
+                              "FGF9", "FGF7", "FGF2", "FGF10")
+pairLR.use <- extractEnrichedLR(cellchat, signaling = c("IL6R","IL6ST",cytokine_signaling,growth_factor_signaling))
 pairLR.use
 netVisual_bubble(cellchat, sources.use = 5, targets.use = c(1,2,3,4,6,7,8), remove.isolate = FALSE,pairLR.use = pairLR.use)
 
