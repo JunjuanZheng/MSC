@@ -11,6 +11,7 @@ library(pheatmap)
 library(qs)
 library(patchwork)
 library(future)
+options(future.globals.maxSize = 5* 1024^5)  # 增加全局大小限制
 
 
 # --- 1. 设置路径和加载数据 ---
@@ -65,26 +66,139 @@ cellchat <- aggregateNet(cellchat)
 df.net <- subsetCommunication(cellchat)
 # 查看数据结构
 head(df.net)
+# =============================================================================
+# CellChat 分析：生成其他核心可视化图表
+# =============================================================================
+# --- 1. 通讯数量与强度的整体视图 ---
+# 这张图可以快速了解哪些细胞亚群是主要的信号发出者或接收者。
+# 确保 projectPath 已定义
+# projectPath <- '/mnt2/wanggd_group/zjj/BGCscRNA/MSC_Duan'
+pdf(file = file.path(projectPath, "./Output/Integration20250829/CellChat_Overall_Interactions.pdf"), width = 12, height = 6)
+
+cellchat <- aggregateNet(cellchat)
+groupSize <- as.numeric(table(cellchat@idents))
+netVisual_circle(cellchat@net$count, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Number of interactions")
+netVisual_circle(cellchat@net$weight, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Interaction weights/strength")
+
+mat <- cellchat@net$weight
+par(mfrow = c(2,3), xpd=TRUE)
+for (i in 1:nrow(mat)) {
+  mat2 <- matrix(0, nrow = nrow(mat), ncol = ncol(mat), dimnames = dimnames(mat))
+  mat2[i, ] <- mat[i, ]
+  netVisual_circle(mat2, vertex.weight = groupSize, weight.scale = T, edge.weight.max = max(mat), title.name = rownames(mat)[i])
+}
+
+print("1. 整体通讯网络图已保存。")
+
+# --- 2. 基于信号通路的热图 ---
+# 这张图展示了每个细胞亚群在发送和接收信号时的主要信号通路。
+# 可以通过 vertex.receiver 参数调整顺序。
+library(ComplexHeatmap)
+p_heatmap <- netVisual_heatmap(cellchat, 
+                               measure = "weight", 
+                               color.heatmap = "Reds")
+
+# b. 使用 pdf() 和 draw() 保存为 PDF 文件
+pdf(file = file.path(projectPath, "./Output/Integration20250829/CellChat_Signaling_Pathway_Heatmap.pdf"), width = 10, height = 8)
+# ComplexHeatmap 对象需要被显式“绘制”出来
+draw(p_heatmap) 
+# 关闭图形设备，完成保存
+dev.off()
+print("2. 信号通路热图已保存。")
+
+###
+cellchat@netP$pathways
+# [1] "COLLAGEN"  "LAMININ"   "FN1"       "PTPRM"     "THBS"      "CDH"
+# [7] "SEMA3"     "CADM"      "NEGR"      "PTN"       "NCAM"      "ADGRG"
+# [13] "PROS"      "MPZ"       "PERIOSTIN" "VEGF"      "SLIT"      "PCDH"
+# [19] "ADGRL"     "Glutamate" "JAM"       "EGF"       "NOTCH"     "EPHA"
+# [25] "PDGF"
+#pathways.show <- c("SEMA3") 
+# Hierarchy plot
+# Here we define `vertex.receive` so that the left portion of the hierarchy plot shows signaling to fibroblast and the right portion shows signaling to immune cells 
+vertex.receiver = seq(1,4) # a numeric vector. 
+netVisual_aggregate(cellchat, signaling = pathways.show,  vertex.receiver = vertex.receiver)
+# Circle plot
+par(mfrow=c(1,1))
+netVisual_aggregate(cellchat, signaling = pathways.show, layout = "circle")
+# Chord diagram
+par(mfrow=c(1,1))
+netVisual_aggregate(cellchat, signaling = pathways.show, layout = "chord")
+netAnalysis_contribution(cellchat, signaling = pathways.show)
+pairLR.CXCL <- extractEnrichedLR(cellchat, signaling = pathways.show, geneLR.return = FALSE)
+LR.show <- pairLR.CXCL[1,] # show one ligand-receptor pair
+# Hierarchy plot
+vertex.receiver = seq(1,4) # a numeric vector
+netVisual_individual(cellchat, signaling = pathways.show,  pairLR.use = LR.show, vertex.receiver = vertex.receiver)
+#> [[1]]
+# Circle plot
+netVisual_individual(cellchat, signaling = pathways.show, pairLR.use = LR.show, layout = "circle")
+
+#### plotGeneExpression
+pathway_list <- cellchat@netP$pathways
+pdf(file = file.path(projectPath, "./Output/Integration20250829/CellChat_AllSigPathwayGenes.pdf"), width = 10, height = 8)
+for (pathway_name in pathway_list) {
+  # 打印当前正在处理的通路，方便追踪进度
+  message(paste("正在为通路繪製图形:", pathway_name))
+  # 使用 tryCatch 来捕获并跳过可能出错的通路
+  # enriched.only = TRUE 时，如果一个通路没有富集的配体-受体对，plotGeneExpression会报错
+  tryCatch({
+    # 生成小提琴图
+    # enriched.only = TRUE: 只显示在通讯推断中被认为是显著的（过表达）的基因
+    # type = "violin": 可以换成 "dot" 来生成点图
+    p <- plotGeneExpression(cellchat, 
+                            signaling = pathway_name, 
+                            enriched.only = TRUE, 
+                            type = "violin")
+    # 将生成的ggplot对象打印到PDF文件中
+    print(p)
+  }, error = function(e) {
+    # 如果发生错误，打印一条消息并跳过这个通路
+    message(paste("警告：无法为通路", pathway_name, "生成图形。可能是因为没有富集的基因。错误信息:", e$message))
+  })
+}
+dev.off()
+
+#######All Sig Pathways   https://theislab.github.io/interaction-tools/14-CellChat.html#5_network_analysis  
+# 1. 通路总览热图
+pathways.show <-cellchat@netP$pathways
+pdf(file = file.path(projectPath, "./Output/Integration20250829/CellChat_IdentifyCommunicationPatterns.pdf"), width = 10, height = 8)
+cellchat <- identifyCommunicationPatterns(cellchat, pattern = "outgoing", k = 3)
+p_outgoing <- netAnalysis_dot(cellchat, pattern = "outgoing")
+print(p_outgoing)
+netAnalysis_river(cellchat, pattern = "outgoing",cutoff = 0.4)
+
+cellchat <- identifyCommunicationPatterns(cellchat, pattern = "incoming", k = 3)
+p_incoming <- netAnalysis_dot(cellchat, pattern = "incoming")
+print(p_incoming)
+netAnalysis_river(cellchat, pattern = "incoming",cutoff = 0.5)
+dev.off()
 
 
+
+
+######################################################################################################
 # 筛选与 C4 相关的通讯（C4 作为 source 或 target）
 df.C4 <- df.net %>%
   filter(source == "C4" | target == "C4")
 
 # 进一步筛选：只保留 C4 与 C1,C2,C3,C5,C6 之间的通讯
 other_clusters <- c("C1", "C2", "C3", "C5", "C6")
-df.C4.filtered <- df.C4 %>%
+df.C4.filtered0 <- df.C4 %>%
   filter(
     (source == "C4" & target %in% other_clusters) |
     (target == "C4" & source %in% other_clusters)
   )
-######################################################################################################
+
+sigPathways=c('THBS','CADM','MPZ','VEGF','EGF','EPHA','SLIT','EGF','CADM')
+df.C4.filtered <- df.C4.filtered0[df.C4.filtered0$pathway_name %in% sigPathways, ]
+
 方法1：气泡图（Bubble Plot）— 最常用
 r
 # 使用 ggplot2 绑定配体-受体对进行气泡图可视化
 library(ggplot2)
-pdf(file.path(projectPath, "./Output/Integration20250829/CellChat_C4_plots.pdf"),
-    width = 16, height = 10)
+#pdf(file.path(projectPath, "./Output/Integration20250829/CellChat_C4_plots.pdf"),
+#    width = 16, height = 10)
 # 创建 interaction_name_2 列（如果没有的话）
 df.C4.filtered$interaction <- paste(df.C4.filtered$ligand, df.C4.filtered$receptor, sep = " - ")
 df.C4.filtered$communication <- paste(df.C4.filtered$source, df.C4.filtered$target, sep = " -> ")
@@ -103,9 +217,8 @@ p1 <- ggplot(df.C4.filtered, aes(x = communication, y = interaction)) +
        title = "C4-related Cell-Cell Communications")
 
 print(p1)
-
 # 保存图片
-ggsave("C4_communication_bubble.pdf", p1, width = 10, height = 12)
+ggsave(file.path(projectPath, "./Output/Integration20250829/C4_communication_bubble.pdf"), p1, width = 10, height = 12)
 方法2：分开画 C4 发出和接收的信号
 r
 # C4 作为信号发送方
@@ -131,11 +244,10 @@ p3 <- ggplot(df.C4.target, aes(x = source, y = paste(ligand, receptor, sep = " -
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   labs(x = "Source Cell", y = "Ligand - Receptor", 
        title = "Signals TO C4 from Other Clusters")
-
 # 组合图
 p23 = p2 + p3
 print(p23)
-ggsave("C4_outgoing_incoming_signals.pdf", p2 + p3, width = 14, height = 10)
+ggsave(file.path(projectPath, "./Output/Integration20250829/C4_outgoing_incoming_signals.pdf"), p2 + p3, width = 14, height = 10)
 方法3：热图展示通讯强度
 r
 library(tidyr)
@@ -404,113 +516,6 @@ print("分析完成！")
 print(paste("结果已保存到:", projectPath))
 
 
-# =============================================================================
-# CellChat 分析：生成其他核心可视化图表
-# =============================================================================
-# --- 1. 通讯数量与强度的整体视图 ---
-# 这张图可以快速了解哪些细胞亚群是主要的信号发出者或接收者。
-# 确保 projectPath 已定义
-# projectPath <- '/mnt2/wanggd_group/zjj/BGCscRNA/MSC_Duan'
-pdf(file = file.path(projectPath, "./Output/Integration20250829/CellChat_Overall_Interactions.pdf"), width = 12, height = 6)
-
-cellchat <- aggregateNet(cellchat)
-groupSize <- as.numeric(table(cellchat@idents))
-netVisual_circle(cellchat@net$count, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Number of interactions")
-netVisual_circle(cellchat@net$weight, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Interaction weights/strength")
-
-mat <- cellchat@net$weight
-par(mfrow = c(2,3), xpd=TRUE)
-for (i in 1:nrow(mat)) {
-  mat2 <- matrix(0, nrow = nrow(mat), ncol = ncol(mat), dimnames = dimnames(mat))
-  mat2[i, ] <- mat[i, ]
-  netVisual_circle(mat2, vertex.weight = groupSize, weight.scale = T, edge.weight.max = max(mat), title.name = rownames(mat)[i])
-}
-
-print("1. 整体通讯网络图已保存。")
-
-# --- 2. 基于信号通路的热图 ---
-# 这张图展示了每个细胞亚群在发送和接收信号时的主要信号通路。
-# 可以通过 vertex.receiver 参数调整顺序。
-library(ComplexHeatmap)
-p_heatmap <- netVisual_heatmap(cellchat, 
-                               measure = "weight", 
-                               color.heatmap = "Reds")
-
-# b. 使用 pdf() 和 draw() 保存为 PDF 文件
-pdf(file = file.path(projectPath, "./Output/Integration20250829/CellChat_Signaling_Pathway_Heatmap.pdf"), width = 10, height = 8)
-# ComplexHeatmap 对象需要被显式“绘制”出来
-draw(p_heatmap) 
-# 关闭图形设备，完成保存
-dev.off()
-print("2. 信号通路热图已保存。")
-
-###
-cellchat@netP$pathways
-# [1] "COLLAGEN"  "LAMININ"   "FN1"       "PTPRM"     "THBS"      "CDH"
-# [7] "SEMA3"     "CADM"      "NEGR"      "PTN"       "NCAM"      "ADGRG"
-# [13] "PROS"      "MPZ"       "PERIOSTIN" "VEGF"      "SLIT"      "PCDH"
-# [19] "ADGRL"     "Glutamate" "JAM"       "EGF"       "NOTCH"     "EPHA"
-# [25] "PDGF"
-#pathways.show <- c("SEMA3") 
-# Hierarchy plot
-# Here we define `vertex.receive` so that the left portion of the hierarchy plot shows signaling to fibroblast and the right portion shows signaling to immune cells 
-vertex.receiver = seq(1,4) # a numeric vector. 
-netVisual_aggregate(cellchat, signaling = pathways.show,  vertex.receiver = vertex.receiver)
-# Circle plot
-par(mfrow=c(1,1))
-netVisual_aggregate(cellchat, signaling = pathways.show, layout = "circle")
-# Chord diagram
-par(mfrow=c(1,1))
-netVisual_aggregate(cellchat, signaling = pathways.show, layout = "chord")
-netAnalysis_contribution(cellchat, signaling = pathways.show)
-pairLR.CXCL <- extractEnrichedLR(cellchat, signaling = pathways.show, geneLR.return = FALSE)
-LR.show <- pairLR.CXCL[1,] # show one ligand-receptor pair
-# Hierarchy plot
-vertex.receiver = seq(1,4) # a numeric vector
-netVisual_individual(cellchat, signaling = pathways.show,  pairLR.use = LR.show, vertex.receiver = vertex.receiver)
-#> [[1]]
-# Circle plot
-netVisual_individual(cellchat, signaling = pathways.show, pairLR.use = LR.show, layout = "circle")
-
-#### plotGeneExpression
-pathway_list <- cellchat@netP$pathways
-pdf(file = file.path(projectPath, "./Output/Integration20250829/CellChat_AllSigPathwayGenes.pdf"), width = 10, height = 8)
-for (pathway_name in pathway_list) {
-  # 打印当前正在处理的通路，方便追踪进度
-  message(paste("正在为通路繪製图形:", pathway_name))
-  
-  # 使用 tryCatch 来捕获并跳过可能出错的通路
-  # enriched.only = TRUE 时，如果一个通路没有富集的配体-受体对，plotGeneExpression会报错
-  tryCatch({
-    # 生成小提琴图
-    # enriched.only = TRUE: 只显示在通讯推断中被认为是显著的（过表达）的基因
-    # type = "violin": 可以换成 "dot" 来生成点图
-    p <- plotGeneExpression(cellchat, 
-                            signaling = pathway_name, 
-                            enriched.only = TRUE, 
-                            type = "violin")
-    # 将生成的ggplot对象打印到PDF文件中
-    print(p)
-  }, error = function(e) {
-    # 如果发生错误，打印一条消息并跳过这个通路
-    message(paste("警告：无法为通路", pathway_name, "生成图形。可能是因为没有富集的基因。错误信息:", e$message))
-  })
-}
-dev.off()
-
-
-
-
-#######All Sig Pathways   https://theislab.github.io/interaction-tools/14-CellChat.html#5_network_analysis  
-# 1. 通路总览热图
-pathways.show <-cellchat@netP$pathways
-cellchat <- identifyCommunicationPatterns(cellchat, pattern = "outgoing", k = 2)
-p_outgoing <- netAnalysis_dot(cellchat, pattern = "outgoing")
-
-cellchat <- identifyCommunicationPatterns(cellchat, pattern = "incoming", k = 3)
-p_incoming <- netAnalysis_dot(cellchat, pattern = "incoming")
-
-netAnalysis_river(cellchat, pattern = "outgoing")
 
 
 
