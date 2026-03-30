@@ -621,7 +621,7 @@ genes_of_interest <- c(
 )
 					   
 valid_genes <- intersect(genes_of_interest, rownames(objIntegrated))
-pdf(file.path(projectPath, "Output/Integration20250829",'DotPlo_MSC_SpecificMarkers_in_AD-BM-UC_Added_ExpressedMarkers.pdf'),width = 6, height = 10)
+pdf(file.path(projectPath, "Output/Integration20250829",'DotPlo_MSC_SpecificMarkers_in_AD-BM-UC_Added_ExpressedMarkers_20260328_.pdf'),width = 6.5, height =6)
 #pdf(file.path(projectPath, "Output/Integration20250829",'DotPlo_MSC_SpecificMarkers_in_AD-BM-UC_AllMSCMarkers.pdf'),width = 6, height = 13)
 ht <- GroupHeatmap(
   srt = objIntegrated,
