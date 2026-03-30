@@ -489,6 +489,130 @@ ggsave(filename = file.path(projectPath, "./Output/Integration20250829/CellChat_
 ggsave(filename = file.path(projectPath, "./Output/Integration20250829/CellChat_C4_merged_bubble_plot_FIXED.pdf"),
        plot = p_merged, width = 14, height = 12, dpi = 300)
 
+################————————————————————————————————————————————————##########################
+################————————————————————————————————————————————————##########################
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# --- 1. 重新处理绘图数据 ---
+df.plot.combined <- df.C4.filtered %>%
+  mutate(
+    LR_pair = gsub("_", " ", interaction_name_2),
+    # 保留 pval 用于过滤，但不再用于控制大小
+    neg_log10_pval = -log10(pval + 1e-10), 
+    # 使用 prob 控制大小
+    prob_val = prob, 
+    # 使用 log2_prob 控制颜色深浅
+    log2_prob = log2(prob + 1e-10),
+    direction = ifelse(source == "C4", "C4_source", "C4_target"),
+    x_label = ifelse(source == "C4", target, source)
+  ) %>%
+  filter(pval < 0.05) # 只保留显著的交互
+
+# 生成 X 轴组合标签
+df.plot.combined <- df.plot.combined %>%
+  mutate(x_combined = paste0(direction, "_", x_label))
+
+# 筛选 Top 30 信号对（确保图片整洁）
+top_LR <- df.plot.combined %>%
+  group_by(LR_pair) %>%
+  summarise(max_p = max(prob)) %>%
+  arrange(desc(max_p)) %>%
+  head(30) %>%
+  pull(LR_pair)
+
+df.plot.final <- df.plot.combined %>%
+  filter(LR_pair %in% top_LR)
+
+# --- 2. 动态设置排序 ---
+source_clusters_present <- unique(df.plot.final$x_label[df.plot.final$direction == "C4_target"])
+target_clusters_present <- unique(df.plot.final$x_label[df.plot.final$direction == "C4_source"])
+
+x_order <- c(
+  paste0("C4_source_", sort(target_clusters_present)),
+  paste0("C4_target_", sort(source_clusters_present))
+)
+
+df.plot.final$x_combined <- factor(df.plot.final$x_combined, levels = x_order)
+df.plot.final$LR_pair <- factor(df.plot.final$LR_pair, 
+                                levels = rev(sort(unique(df.plot.final$LR_pair))))
+
+# 设置 X 轴简易标签 (C1, C2...)
+x_labels <- paste0('C', gsub("C4_source_|C4_target_", "", levels(df.plot.final$x_combined)))
+
+# --- 3. 绘图 ---
+n_source_group <- length(target_clusters_present)
+n_target_group <- length(source_clusters_present)
+
+p_merged <- ggplot(df.plot.final, aes(x = x_combined, y = LR_pair)) +
+  # 【核心修改】：size 映射到 prob_val
+  geom_point(aes(size = prob_val, color = log2_prob)) +
+  
+  # 颜色设置：蓝-黄-红 渐变
+  scale_color_gradientn(
+    colors = colorRampPalette(c("#2166ac", "#fddbc7", "#b2182b"))(100),
+    name = "log2(Prob)"
+  ) +
+  
+  # 【核心修改】：使用 scale_size_area 确保面积与数值成正比，更容易区分差异
+  scale_size_area(
+    max_size = 10, 
+    name = "Communication\nProbability"
+  ) +
+  
+  scale_x_discrete(labels = x_labels, drop = FALSE) +
+  
+  # 底部标注与分割线
+  annotate("segment", x = 0.5, xend = n_source_group + 0.5, y = -0.5, yend = -0.5, color = "black", linewidth = 1) +
+  annotate("text", x = (1 + n_source_group) / 2, y = -1.5, label = "C4 -> Others", size = 4.5, fontface = "bold") +
+  
+  annotate("segment", x = n_source_group + 0.5, xend = n_source_group + n_target_group + 0.5, y = -0.5, yend = -0.5, color = "black", linewidth = 1) +
+  annotate("text", x = n_source_group + (1 + n_target_group) / 2, y = -1.5, label = "Others -> C4", size = 4.5, fontface = "bold") +
+  
+  geom_vline(xintercept = n_source_group + 0.5, linetype = "dashed", color = "grey70") +
+  
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, color = "black"),
+    axis.text.y = element_text(color = "black"),
+    axis.title = element_blank(),
+    panel.grid.major = element_line(color = "grey95"),
+    panel.grid.minor = element_blank(),
+    plot.margin = margin(t = 10, r = 10, b = 60, l = 10)
+  ) +
+  coord_cartesian(clip = "off")
+
+# --- 4. 预览与保存 ---
+print(p_merged)
+
+ggsave(filename = file.path(projectPath, "CellChat_C4_merged_bubble_plot_FIXED_20260330.pdf"), 
+       plot = p_merged, width = 12, height = 10)
+################————————————————————————————————————————————————##########################
+################————————————————————————————————————————————————##########################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # --- 9. 其他可视化（可选）---
 
 # 圆形图：显示 C4 与其他 cluster 的通讯强度
